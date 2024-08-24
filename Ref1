@@ -1,0 +1,1014 @@
+Referrence link: https://www.cyberciti.biz/tips/shell-script-to-watch-the-disk-space.html
+
+nixCraft
+nixCraft → Tutorials → Linux → Shell script to watch the disk space and send an email
+Shell script to watch the disk space and send an email
+Author: Vivek Gite Last updated: July 26, 2024 71 comments
+Shell script to watch the disk space and send an email alert
+The df command under Linux displays the amount of disk space available on the file system containing each file name argument. Without any command-line argument, the df lists space available on all currently mounted Linux file systems. Let us see how to send an email alert when you run out of disk space by setting up 90% as the threshold.
+
+Tutorial details
+Difficulty level	Easy
+Root privileges	Yes
+Requirements	Linux or Unix terminal
+Category	Disk Management
+OS compatibility	BSD • Linux • Unix
+Est. reading time	4 minutes
+Advertisement
+
+Linux shell script to send an alert email if disk usage exceeds 90%
+The steps are as follows:
+(a) First, find disk space usage using the df command.
+(b) Then filter out filesystem and find out the percentage of space using the grep command or egrep command.
+(c) Write a shell script to watch the disk space and send an email.
+
+Step # 1: First get disk space:
+
+Open the terminal application and type the df command (no need to use the du command) to check free disk space on your Linux or Unix server. For example:
+df -H
+
+The -H option show sizes in powers of 1000 as follows:
+
+Filesystem             Size   Used  Avail Use% Mounted on
+/dev/hdb1               20G    14G   5.5G  71% /
+tmpfs                  394M   4.1k   394M   1% /dev/shm
+/dev/hdb5               29G    27G   654M  98% /nas/www
+
+Step # 2: Next filter out filesystem and find out the percentage of space
+We don’t want unwanted file systems. For example, NFS mounted or CD/DVD ROM or loopback devices. So how do you filter out the results? use the grep command or egerp command as follows:
+df -H | grep -vE '^Filesystem|tmpfs|cdrom' | awk '{ print $5 " " $1 }'
+df -H | grep -vE '^Filesystem|tmpfs|cdrom|loop|udev' | awk '{ print $5 " " $1 }'
+
+Now we get desired outputs with for disk usage in percentage as follows:
+
+
+71% /dev/hdb1
+98% /dev/hdb5
+Let us break down the df -H | grep -vE '^Filesystem|tmpfs|cdrom' | awk '{ print $5 " " $1 }' command:
+
+First, you run the df command with the -H option to get a human-readable output on your screen.
+Next, you use the grep command to filter out the lines that start with the following strings: Filesystem, tmpfs, and cdrom. In other words, you only need a real block disk/device and filter out the rest of the outputs.
+Finally, you use the awk command to display the fifth and first columns of the output. The fifth column is the percentage of disk space used, and the first column is the mount point.
+Prerequisite
+By default, mail command may not be installed on your system. Hence, use the apk command on Alpine Linux, dnf command/yum command on RHEL & co, apt command/apt-get command on Debian, Ubuntu & co, zypper command on SUSE/OpenSUSE, pacman command on Arch Linux to install the mail.
+
+Step # 3: Write a shell script
+So far, so good. The above Linux command displays fields 5 and 1 of the df command. Now all you need to do is write a script to see if the percentage of space is >= 90%. In other words, the following shell script will send an alert email alert if disk usage exceeds 90%.
+#!/bin/sh
+# Purpose: Monitor Linux disk space and send an email alert to $ADMIN
+ALERT=90 # alert level 
+ADMIN="you@cyberciti-biz" # dev/sysadmin email ID
+df -H | grep -vE '^Filesystem|tmpfs|cdrom' | awk '{ print $5 " " $1 }' | while read -r output;
+do
+  echo "$output"
+  usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1 )
+  partition=$(echo "$output" | awk '{ print $2 }' )
+  if [ $usep -ge $ALERT ]; then
+    echo "Running out of space \"$partition ($usep%)\" on $(hostname) as on $(date)" |
+    mail -s "Alert: Almost out of disk space $usep%" "$ADMIN"
+  fi
+done
+Here is how to install the mail command on a Debian/Ubuntu Linux using the apt-get command or apt command:
+sudo apt install mailutils
+
+For RHEL/CentOS/Rocky/Oracle/Alma or Fedora Linux try the yum command or dnf command to install the mail command:
+sudo dnf install mailx
+
+Make sure your system can route outgoing email. You can route (send) email using Gmail account with help of msmtp or ssmtp.
+Step # 4: Setup a Cron job
+
+Save and install the script using a cronjob. Copy script to /etc/cron.daily/ using the cp command (script downolad link):
+cp diskAlert /etc/cron.daily/
+
+Set up permission using the chmod command. For example:
+chmod +x /etc/cron.daily/diskAlert
+
+Once placed in the /etc/cron.daily/ directory, the diskAlert script will run daily on Linux systems. This ensures that important maintenance tasks, like monitoring disk space, are performed regularly by the sysadmin, preventing any potential issues. That’s all there is to it.
+
+Installing cron job
+Of course, you install it as cronjob using the crontab command too. For example, this is useful when you do not wish to use the /etc/cron.daily/ directory:
+crontab -e
+
+Write cronjob as per your requirement. For example:
+10 0 * * * /path/to/diskAlert
+
+OR
+@daily /path/to/diskAlert
+
+An updated script version to watch the disk space and send email alert
+Tony contributed and updated my script – You can exclude selected filesystem in case you don’t want monitor all filesystems.
+#!/bin/sh
+# set -x
+# Shell script to monitor or watch the disk space
+# It will send an email to $ADMIN, if the (free available) percentage of space is >= 90%.
+# --------------------------------------------------------------------------------------------------------
+# Set admin email so that you can get email.
+ADMIN="root"
+# set alert level 90% is default
+ALERT=90
+# Exclude list of unwanted monitoring, if several partions then use "|" to separate the partitions.
+# An example: EXCLUDE_LIST="/dev/hdd1|/dev/hdc5"
+EXCLUDE_LIST="/auto/ripper|loop"
+#
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+main_prog() {
+while read -r output;
+do
+  #echo "Working on $output ..."
+  usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1)
+  partition=$(echo "$output" | awk '{print $2}')
+  if [ $usep -ge $ALERT ] ; then
+     echo "Running out of space \"$partition ($usep%)\" on server $(hostname), $(date)" | \
+     mail -s "Alert: Almost out of disk space $usep% on $partition" "$ADMIN"
+  fi
+done
+}
+ 
+if [ "$EXCLUDE_LIST" != "" ] ; then
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom|${EXCLUDE_LIST}" | awk '{print $5 " " $6}' | main_prog
+else
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom" | awk '{print $5 " " $6}' | main_prog
+fi
+Summing up
+I hope this quick Linux and Unix post and script helps someone to monitor their free disk space health and get an email alert before you run out of it. You can also send push notification to your iOS or Android phone using the same method. See the following tutorial for more info:
+
+How to push/send message to iOS and Android from Linux CLI
+How to configure Postfix relayhost (smarthost) to send eMail using an external smptd
+Postfix Configure Client SMTP Authentication ( Smarthost Authentication )
+How to send emails with Postfix & AWS SES on RHEL/CentOS 8
+How to configure AWS SES with Postfix MTA
+FreeBSD configure AWS SES with Postfix MTA
+🥺 Was this helpful? Please add a comment to show your appreciation or feedback.
+
+nixCrat Tux Pixel Penguin
+Hi! 🤠
+I'm Vivek Gite, and I write about Linux, macOS, Unix, IT, programming, infosec, and open source. Subscribe to my RSS feed or email newsletter for updates.
+🔎 To search, type & hit enter...
+Related Posts
+Perl script to monitor disk space and send an emailPerl script to monitor disk space and send an email
+How to send anonymous email from shell prompt using…How to send anonymous email from shell prompt using…
+PHP Send Email Using Authenticated SMTP Mail Server…PHP Send Email Using Authenticated SMTP Mail Server…
+Debian Linux Remove Unwanted Packages And Files To…Debian Linux Remove Unwanted Packages And Files To…
+Save Disk Space under Apache Web serverSave Disk Space under Apache Web server
+pydf - Linux tool to see colourised filesystem disk…pydf - Linux tool to see colourised filesystem disk…
+Download and Watch YouTube videos from Linux Shell PromptDownload and Watch YouTube videos from Linux Shell Prompt
+Apache and Lighttpd server send error 503 when web…Apache and Lighttpd server send error 503 when web…
+71 comments… add one
+Per Lindahl Mar 29, 2007 @ 15:16
+I noticed that on devices that have very long path in some cases there might be a line break appended to the output and that will in turn create an error when the script is run like:
+
+line 22: [: -ge: unary operator expected
+
+To remove the line break just append “-P” to the “df” command.
+
+example:
+df -HlP
+
+(P) = adds posix compliance to the output.
+
+Errors that occured: df -H
+/dev/mapper/volume00-pgvol
+50G 31G 19G 62% /localhome/postgresql
+
+with -P
+/dev/mapper/volume00-pgvol 50G 31G 19G 62% /localhome/postgresql
+
+Also if you only have one type of filesystem that you need to monitor then add “-t ext3” will only show EXT3 filesystems.
+
+Hope it helps.
+Regards,
+Per L
+
+↩ ∞
+APV Jan 17, 2013 @ 8:55
+That really works.. Thank U 🙂
+
+↩ ∞
+Gokhan Jun 17, 2014 @ 11:58
+I works, thank you.
+
+↩ ∞
+granola Jan 26, 2015 @ 13:41
+Thanks, it actually enhances this script readability, also. 😉
+
+↩ ∞
+🛡️Vivek Gite (Author and Admin) nixCraft Mar 30, 2007 @ 17:27
+Per Lindahl,
+
+Thanks for sharing your tip!
+
+↩ ∞
+Trula May 6, 2007 @ 23:18
+Please show me if I need to get disk file last week or 10 days ago, what do I need to do?
+Thank you ~ Trula
+
+↩ ∞
+Parameshwar Jun 13, 2023 @ 5:49
+Thn u needs to create one history file which contains past history
+
+↩ ∞
+Mehmet Buyukozer May 19, 2007 @ 23:55
+For my case:
+
+df -h | grep d30 | awk ‘{ print $5 ” ” $1 }’ | while read output;
+
+worked better. Thanks for shell script, life saver one.
+
+↩ ∞
+d30 is the filename? Mar 9, 2017 @ 10:06
+i have a doubt regarding where can I put the filesystem path
+
+↩ ∞
+sorabh harit Jul 10, 2007 @ 5:48
+HI
+
+thanks for script but i am getting following error
+on my solaris 9 servrer after executing the scipt.
+
+syntax error at line 5: `usep=$’ unexpected
+
+Regards
+
+Sorabh harit
+
+↩ ∞
+Niek Aug 17, 2007 @ 16:08
+@sorabh harit:
+That is because you run a “real” Bourne shell, which doesn’t understand the syntax on that line.
+
+Also, there is a fair bit of double code at the end, and use of a function isn’t really necessary.
+
+I’ve put up a modified version on my site:
+http://www.qwertyboy.org/files/diskspace.txt
+
+Niek.
+
+↩ ∞
+Rohan Sep 13, 2007 @ 12:27
+Can you please tell me how to find disk usage for a particular user only…!
+
+↩ ∞
+Derek Murphy Nov 14, 2007 @ 19:52
+I tried using this script but I’m getting a syntax error, trying to run this on linux(redhat as 4) any thoughts?
+
+-bash-3.00$ ./diskscript.sh
+13% /dev/cciss/c0d0p2
+17% /dev/cciss/c0d0p1
+1% /dev/cciss/c0d0p5
+./diskscript.sh: line 4: syntax error near unexpected token `do’
+./diskscript.sh: line 4: `do’
+
+#!/bin/sh
+#df -H | grep -vE ‘^Filesystem|tmpfs|cdrom’ | awk ‘{ print $5 ” ” $1 }’ | while read output;
+df -F ext3 -k | grep -vE ‘^Filesystem|tmpfs|cdrom’ | awk ‘{print $5 ” ” $1}’
+do
+echo $output
+usep=$(echo $output | awk ‘{ print $1}’ | cut -d’%’ -f1 )
+partition=$(echo $output | awk ‘{ print $2 }’ )
+if [ $usep -ge 90 ]; then
+echo “Running out of space “$partition ($usep%)” on $(hostname) as on $(date)” |
+mail -s “Alert: Almost out of disk space $usep%” derek@iona.com
+fi
+done
+
+↩ ∞
+Hari Dec 2, 2007 @ 19:10
+while executing the below script i am getting the following:
+
+Script:
+
+#!/bin/sh
+df -H | grep -vE ‘^Filesystem’ | awk ‘{ print $5 ” ” $1 }’ | while read output;
+do
+echo $output
+usep=$(echo $output | awk ‘{ print $1}’ | cut -d’%’ -f1 )
+partition=$(echo $output | awk ‘{ print $2 }’ )
+if [ $usep -ge 50 ]; then
+echo “Running out of space “$partition ($usep%)” on $(hostname) as on $(date)” |
+mail -s “Alert: Almost out of disk space $usep%” Hari-Krishna.Reddy@in.standardchartered.com
+fi
+done
+
+Error:
+
+sh diskAlert.sh
+/dev/mapper/rootvg-rootvol
+diskAlert.sh: line 7: [: /dev/mapper/rootvg-rootvol: integer expression expected
+/ 4.2G
+diskAlert.sh: line 7: [: /: integer expression expected
+14% /dev/sda1
+0% none
+/dev/mapper/rootvg-homevol
+diskAlert.sh: line 7: [: /dev/mapper/rootvg-homevol: integer expression expected
+/home 2.1G
+diskAlert.sh: line 7: [: /home: integer expression expected
+/dev/mapper/rootvg-sharedvol
+diskAlert.sh: line 7: [: /dev/mapper/rootvg-sharedvol: integer expression expected
+/shared 6.3G
+diskAlert.sh: line 7: [: /shared: integer expression expected
+/dev/mapper/rootvg-varvol
+diskAlert.sh: line 7: [: /dev/mapper/rootvg-varvol: integer expression expected
+/var 2.1G
+diskAlert.sh: line 7: [: /var: integer expression expected
+
+can any one help me on this.
+
+↩ ∞
+Ambika Jan 25, 2008 @ 11:16
+i want the disk space scripts where it should send the mail in the .lst file
+
+↩ ∞
+david Jul 22, 2008 @ 5:08
+i am able to run the shell script properly but if i put it in a crontab its not working fine
+can anyone plz suggest me in this
+
+thnks
+david
+
+↩ ∞
+jack Sep 1, 2008 @ 10:25
+Can you send your crontab scripts?
+
+↩ ∞
+Prasanna Oct 8, 2008 @ 8:31
+Hi
+
+I have to select 10% of the files from a 1 million records file at random. Could anyone help me with a shell script?
+thanks and regards
+Prasanna
+
+↩ ∞
+adgar marks Jan 21, 2009 @ 16:08
+I am using Gentoo and i get the following error:
+
+./freespace.sh: line 25: [: Ben: integer expression expected
+
+Once i do “echo $output”, i get an empty line and i dont know what wasi suppose to expect from $output.
+
+I hope someone could help me a bit
+
+thansk
+
+↩ ∞
+jack May 5, 2009 @ 13:17
+hello..
+
+what if your both partitions will run out of space? you will receive 2 mails. if you have more partitions, then you will receive more mails… how you do to receive all messages in one mail?
+
+↩ ∞
+Susmitha Sep 2, 2016 @ 3:49
+I too have the same query. Expecting the answer please.
+
+↩ ∞
+Neo Jun 12, 2009 @ 11:43
+Hi,
+
+I have typed in df -h, all my files were display. I have found that my log file is full, file name /lsx/log sitting at 100%, then I typed in the command du -akd |sort -rn | more to sort from big to small, I found that /fb was the biggest and tried to clean up with then command cat /dev/null > fb, but didn’t clean up any of the files. Please advice me how to clean up log files when full.
+
+Regards,
+Neo
+
+↩ ∞
+rebelteam Jul 12, 2009 @ 13:32
+112351469166c6ed2a82c4c_000002
+
+↩ ∞
+kiran Nov 12, 2009 @ 23:49
+syntax error at line 5: `usep=$â€™ unexpected
+
+Hi iam getting hte same error. And unable to acces your URL provided forthe updated code..Can you please help me insortiugn this
+
+↩ ∞
+rocky Feb 9, 2010 @ 22:13
+@@rebelteam
+
+I got error while running you script on Solaris 10 box , any idea
+
+-bash-3.00$ ./test
+./test: line 24: [: :: integer expression expected
+./test: line 29: [: :: integer expression expected
+./test: line 24: [: :: integer expression expected
+./test: line 29: [: :: integer expression expected
+
+#!/usr/bin/bash
+
+#admin email account
+ADMIN=”test@test.com”
+
+# set usage alert threshold
+THRESHOLD=10
+
+#hostname
+HOSTNAME=$(hostname)
+
+#mail client
+MAIL=/usr/bin/mail
+
+# store all disk info here
+EMAIL=””
+
+for line in $(df -kh | egrep ‘^/dev/’ | awk ‘{ print $6 “_:_” $5 }’)
+do
+
+part=$(echo “$line” | awk -F”_:_” ‘{ print $1 }’)
+part_usage=$(echo “$line” | awk -F”_:_” ‘{ print $2 }’ | cut -d’%’ -f1 )
+
+if [ $part_usage -ge $THRESHOLD -a -z “$EMAIL” ];
+then
+EMAIL=”$(date): Running out of diskspace on $HOSTNAMEn”
+EMAIL=”$EMAILn$part ($part_usage%) >= (Threshold = $THRESHOLD%)”
+
+elif [ $part_usage -ge $THRESHOLD ];
+then
+EMAIL=”$EMAILn$part ($part_usage%) >= (Threshold = $THRESHOLD%)”
+fi
+
+↩ ∞
+llattan May 14, 2010 @ 17:28
+The script doesn’t work when:
+
+1) there is a filesystem with “$” (nfs mounted coming from windows hidden shares)
+
+i.e //10.10.10.10/back$
+
+2) the name of a filesystem is large and the percentage of use appears in another line
+
+i.e.
+//10.10.10.10/verylongnamefilesystem
+78140128 45746488 32393640 59% /mnt/
+
+Regards.
+
+↩ ∞
+RamÃ­rez May 17, 2010 @ 14:42
+I’ve made my own bash script for watching free space. Its main feature is that it runs with X and uses pop-ups for warning the user. Please see http://galinux.myftp.org/hdfree/
+
+↩ ∞
+victor Aug 12, 2010 @ 9:09
+when I run script on solair 10. It errors
+# ./Diskalert.sh
+./Diskalert.sh: syntax error at line 21: `usep=$’ unexpected
+
+Please help me?
+Thank you very much
+
+Best regards,
+
+↩ ∞
+broxigar Aug 18, 2010 @ 13:06
+When I try to run the updated script, on a Ubuntu server, I get an syntax error: “(” unexpected at “function main_prog() {”
+
+What is wrong here?
+
+↩ ∞
+Brad Nov 1, 2010 @ 18:24
+None of the scripts here work on RHEL5.5.
+
+All of them give errors….
+
+↩ ∞
+Rajesh Thakur Nov 11, 2010 @ 9:54
+hi,
+i have multiple servers and i am running this script from single server where ssh keys fro all servers are added…
+issue: when i run it it throws me multiple mails on the id i specified in the script, if i have 12 linux remote servers thn it will throw 12 mails…i want to get details in one mail..
+
+does anyone has idea abt it please….it will be agreat assistance.
+
+Best wishes,
+Rajesh Thakur
+
+↩ ∞
+Evert Mouw Nov 18, 2010 @ 10:53
+@broxigar and others:
+
+The syntax error “syntax error: â€œ(â€ unexpected at â€œfunction main_prog() {â€” can be solved by using bash instead of sh as script interpreter. So, after the shebang, use /bin/bash or /usr/bin/bash
+
+↩ ∞
+souvik Nov 18, 2010 @ 13:24
+hi,
+
+the above scripts have been really helpful but can u give me a generalized way of extracting the necessary mount points in different servers. i am avoiding the way to hard code the mount point.
+
+Thanks..
+
+↩ ∞
+swarajsingh Mar 8, 2011 @ 14:27
+#! /bin/sh
+clear;
+
+#echo "enter erver no gibe the serer names u want to checkthe space inside";
+ a=xldn2094dap;
+ b=xldn2095dap;
+c=xldn1844dap;
+d=xldn1845dap;
+e=xldn1599vdap;
+ f=xldn1600vdap;
+
+ echo "for server $a"
+
+  ssh -q $a  "df -k /sbclocal";     #df -k /sbcloca--sbclocal is folder where we spaces r checked
+
+echo "               "
+
+
+ echo "for server $b"
+
+ssh -q $b  "df -k /sbclocal";
+
+echo "            ";
+
+
+ echo "for server $c"
+
+
+  ssh -q $c  "df -k /sbclocal";
+
+echo "           ";
+
+
+ echo "for server $d"
+
+   ssh -q $d  "df -k /sbclocal";
+
+
+echo "                   ";
+
+
+echo "for server $e"
+
+
+ ssh -q $e  "df -k /sbclocal";
+
+
+
+exit;
+↩ ∞
+charles Apr 1, 2011 @ 23:49
+Very nice, with some minor changes it works beautifully!!!
+Thanks for helping out the coding-handicapped!
+
+↩ ∞
+Sri Apr 11, 2011 @ 20:31
+hi
+iam getting the below for my shell script for space alert on linus server
+/home/oracle/dba/scripts > ./space_alert.sh
+./space_alert.sh: line 15: [: /dbbackup: integer expression expected
+
+after that i have user df -HP command to append it .. but iam not able to get the ouput through mail
+#!/bin/bash
+
+SENT_TO=”dba-support@marlabs.com”
+LOGFILE=/home/oracle/dba/scripts/log/disk_alert.log
+ALERT=10
+EXCLUDE_LIST=”/dbbackup”
+if [ -f ${LOGFILE} ]; then
+rm $LOGFILE
+fi
+
+df -HP | grep -vE ‘^Filesystem|tmpfs|cdrom|product|mapper’ | awk ‘{ print $5 ” ” $6 }’ | while read output;
+do
+usep=$(echo $output | awk ‘{ print $1}’ | cut -d’%’ -f1 )
+partition=$(echo $output | awk ‘{ print $2 }’ )
+if [ $usep -ge $ALERT ]; then
+if [ ! -f ${LOGFILE} ]; then
+touch $LOGFILE
+fi
+echo “Running out of space on $partition ($usep%) on $(hostname) as on $(date)” >> ${LOGFILE}
+echo “” >> ${LOGFILE}
+fi
+done
+
+if [ -f ${LOGFILE} ]; then
+/bin/mail -s “space_alert.sh – $(hostname) – Almost out of disk space” $SENT_TO < ${LOGFILE}
+fi
+
+#rm $LOGFILE
+
+Please help on this
+
+thanks
+
+↩ ∞
+hypersmil Apr 20, 2011 @ 9:41
+there are some issues with this script
+
+– it won’t work with non english output from df
+
+Dateisystem             Size   Used  Avail Use% EingehÃ¤ngt auf
+/dev/sda1              9,9G   3,3G   6,1G  35% /
+none                    17G   213k    17G   1% /dev
+none                    17G      0    17G   0% /dev/shm
+none                    17G   103k    17G   1% /var/run
+none                    17G      0    17G   0% /var/lock
+none                   9,9G   3,3G   6,1G  35% /var/lib/ureadahead/debugfs
+/dev/sda2               64G    17G    48G  26% /usr/local
+/dev/md0               147G    43G   105G  29% /mnt
+/dev/sde1              400G   203G   198G  51% /mnt/usbdisk
+change
+
+    grep -vE "^Filesystem|tmpfs|cdrom"
+to
+
+    grep -vE "^Dateisystem|tmpfs|cdrom"
+or you could change it to
+
+  grep -vE "^[^/]|tmpfs|cdrom"
+to remove all lines not starting with a / which would also remove mounted network shares (sshfs, nfs etc.)
+
+additionally you could change the df command to
+
+  df -hP fuse.sshfs -x nfs
+to remove mounted network devices
+
+another problem arises from the use of “sh” instead of bash –
+it won’t work –
+change the first line to
+
+#!/bin/bash
+to improve the error reporting you could also add the hostname to the subject line
+
+mail -s "Alert: $(hostname) almost out of disk space $usep%" $ADMIN
+↩ ∞
+Stefan Jun 8, 2011 @ 19:38
+One reason for “integer expression expected”-errors is that if “$usep” is empty the test fails. Just test if “$usep” is empty and do nothing if so:
+
+if [ ! “$usep” == “” ] ; then
+if [ $usep -ge $ALERT ] ; then
+echo “Running out of space “$partition ($usep%)” on server $(hostname), $(date)” |
+mail -s “Alert: $(hostname) almost out of disk space $usep%” $ADMIN
+fi
+fi
+
+↩ ∞
+Stefan Jun 8, 2011 @ 20:00
+to remove non-local drives it would be better so use the “-l” option of df (substitute “df -H” with “df -lH”).
+
+↩ ∞
+BABU Jun 17, 2011 @ 12:01
+Please provide me rhe query for solaris and HP-UX and IBM-AIX
+
+Very urgent please
+
+↩ ∞
+Juan Nicolas Jul 8, 2011 @ 5:55
+Great script, very simple and works like a charm. i have a question tho, could someone help me to make this script to run a gzip command and monitor the pid in order to start another gzip after the first pid ends? Is it possible to do that, well, in scripts all is possible 🙂
+
+I need to run 2 gzips on differents directories but can’t run them at the same time since this will eat my cpu and the disk IO will be very high. I need to start one and then the other. Thanks in advance
+
+↩ ∞
+romsieze Jul 28, 2011 @ 17:52
+OP- You rock. You saved my arse this time around…..
+
+↩ ∞
+pk Aug 28, 2011 @ 16:07
+I need to know the the usage of particular filesystem on 10 days back. Is it possible to use two or more df option in single line? If yes then how can we use twp grep statement in single line? Thanks in advance !!
+
+I used below line:df -H | grep d30 | awk ‘{print $5 ” ” $1}’ | main_prog
+
+But it is not sending any email.
+
+↩ ∞
+stainless Jan 8, 2012 @ 16:07
+Ok this is the slightly modified version, tested and working on different versions of linux …Enjoy!
+
+#!/bin/bash
+
+> alert.txt
+
+HOST=$(hostname)
+
+THRES=20
+
+COUNT=1
+
+df -HP | grep -vE ‘Filesystem|tmpfs’ | awk ‘{ print $5 ” ” $6 }’ |
+while read space;
+
+do
+
+DISK=$(echo $space | cut -d “%” -f1)
+DRIVENAME=$(echo $space | cut -d ” ” -f2)
+
+if [ “$DISK” -ge “$THRES” ]
+
+then
+
+echo You have used “$DISK”% on drive “$DRIVENAME” on server “$HOST” >>alert.txt
+
+fi
+
+done
+echo alert.txt | mail -s “Disk space Alert on server $HOST” root
+
+↩ ∞
+Amer Siddique Jan 9, 2012 @ 11:35
+This script is working fine
+
+#!/bin/sh
+df -H | grep -vE '^Filesystem|tmpfs|cdrom' | awk '{ print $5 " " $6 }' | while read output;
+do
+  echo $output
+  usep=$(echo $output | awk '{ print $1}' | cut -d'%' -f1  )
+  echo $usep
+  partition=$(echo $output | awk '{ print $2 }' )
+  if [ $usep -ge 90 ]; then
+    echo "Running out of space "$partition ($usep%)" on $(hostname) as on $(date) :  $usep%" |
+     mail -s "Alert: Critical Almost out of disk space $partition $usep%"
+Someone@email.com  fi
+
+ if [ $usep -ge 85 ]; then
+    echo "Running out of space "$partition ($usep%)" on $(hostname) as on $(date) :  $usep%" |
+     mail -s "Alert: Warning Almost out of disk space $partition $usep%" amer.siddique@bskyb.com
+  fi
+done
+↩ ∞
+Saini Feb 28, 2012 @ 9:52
+`Hi
+
+I need to write a script which finds a Filesystem which is 100% full and then removes the directoriess temp and cache by running the below commands:
+rm /export/home/dw_adm/Informatica/PowerCenter8.6.1/server/infa_shared/Cache/*
+rm /export/home/dw_adm/Informatica/PowerCenter8.6.1/server/infa_shared/Temp/*
+can u plz suggest how to do?
+
+Thanx
+
+↩ ∞
+Saini Feb 28, 2012 @ 10:56
+I have prepared the below script to find the filesystem which is 100% full and then remove directories from the given path.But while running its giving an error like:syntax error at line 11: `FSU=$’ unexpected.
+Please let me know the issue in the script.
+
+Thanks.
+
+#!/bin/ksh
+
+## This script is for deleting temp and cache files from filesystems on DR. Following will be executed:
+## 1)The file srwaisobi001data/zsrwaisobietl01/home will be checked for size.
+## 2)If the file is FULL ,mail will be triggered to admin team to delete temp and cache files.
+## 3)All temp and cache files will be deleted from DR filesystems if the file is FULL.
+## 4)The file will be checked for space.
+## 5)After the issue is resolved,mail will be sent to the team.
+## In case of failure this task can safely be marked as Completed for current run and investigated later.
+
+FSU=$(df -h|grep '/export/home'|awk '{ print $5}'|sed 's/%//g')
+echo $FSU
+if [ $FSU -eq 100 ]
+then
+echo "File System is 100% used.Send email to Admin team "
+df -h /export/home >space.txt
+mailx -s " srwaisobi001data/zsrwaisobietl01/home is full." user@mail.com space.txt
+mailx -s " srwaisobi001data/zsrwaisobietl01/home is ok." user@mail.com <space.txt
+fi
+Last edited by Admin. Reason: <pre> tag added to the code.
+
+↩ ∞
+Pranee[ Aug 27, 2012 @ 6:46
+this scrip is not working in Sun solaries i have error came grep:illegal option –E
+usage -hblcnsviw pattern file..im using usr/bin
+
+↩ ∞
+Render Web Solutions Jan 4, 2017 @ 13:44
+Hi I am getting error disusagealert.sh: 17: disusagealert.sh: Syntax error: “done” unexpected (expecting “fi”)
+
+Please advise
+
+↩ ∞
+shaimaa Sep 4, 2012 @ 15:59
+Hello,
+
+df -H is not working on my server..should I replace it with df -k ?
+
+↩ ∞
+vanitha K B Sep 7, 2012 @ 5:41
+Hi,
+am new to this unix and wanted to know the syntax to schedule a cronjob. i just need to convey a message on alternate days at 10AM. i have a script with that message…
+
+↩ ∞
+Leo Oct 16, 2012 @ 14:30
+For HP-UX: use bdf instead of df and mailx instead of mail
+
+#!/bin/sh
+bdf | grep '%' | awk '{ print $5 " " $6 }' | while read output;
+do
+  echo $output
+  usep=$(echo $output | awk '{ print $1}' | cut -d'%' -f1  )
+  partition=$(echo $output | awk '{ print $2 }' )
+  if [ $usep -ge 90 ]; then
+    echo "Running out of space "$partition ($usep%)" on $(hostname) as on $(date)" |
+     mailx -s "Alert: Almost out of disk space $usep%" youremail@yourdomain.com
+  fi
+done
+↩ ∞
+Sitanshu Shekhar Oct 30, 2012 @ 14:04
+Hi,
+I want to run the Script (Contrubted by Tony) for watching the Disk space of multiple servers using SSH login.
+
+Can you please advice how can I do so?
+
+Thanks in advance.
+
+Br
+
+↩ ∞
+BG May 14, 2013 @ 23:37
+On Solaris try bash shell if you are having issue
+
+replace #!/bin/sh with #!/bin/bash
+
+Hope this helps!
+
+↩ ∞
+viny Sep 26, 2013 @ 5:27
+I ran this script and found the error mentioned below:-
+
+#!/bin/sh
+df -H | grep -vE '^Filesystem|none|cdrom' | awk '{ print $5 " " $1 }' | while read output;
+do
+  echo $output
+  usep=$(echo $output | awk '{ print $1}' | cut -d'%' -f1  )
+  partition=$(echo $output | awk '{ print $2 }' )
+  if [ $usep -ge 50 ]; then
+    echo "Running out of space "$partition ($usep%)" on $(hostname) as on $(date)" |
+     mail -s "Alert: Almost out of disk space $usep%" x@gmail.com
+  fi
+done
+Error:-
+./abc2.sh: syntax error at line 5: `usep=$’ unexpected
+
+↩ ∞
+swaraj Sep 26, 2013 @ 16:49
+Strange…!!
+Which Shell are you using..??
+sorry no correct answers from me…
+just copy pasted and it worked fine for me(using bash) 🙂
+
+↩ ∞
+swaraj Sep 26, 2013 @ 16:57
+Hi again,,
+wild guess try
+#!/bin/bash
+or
+/usr/xpg4/bin/sh
+
+Good luck
+
+↩ ∞
+Kyle Nov 3, 2014 @ 19:13
+What is the function of ‘usep’ and where can I find an rpm for it?
+
+↩ ∞
+harish sharma Nov 11, 2014 @ 6:46
+ou are a given an input file serverList.txt and simulated input of disk utilization diskout.txt. You are expected to write an automated script which would have the serverList.txt as input which has the list of IP Addresses of the servers and the simulated output of the disk utilization file diskout.txt as the input file.
+
+The script should process these files and find the IP Addresses which breaches the threshold of 70%.
+
+↩ ∞
+Menno Nov 11, 2015 @ 11:38
+Love it! Thanks 🙂
+
+↩ ∞
+PK Nov 28, 2017 @ 19:22
+On below script, how can i set up different threshold for different file system. Need help.
+
+#!/bin/sh
+# set -x
+# Shell script to monitor or watch the disk space
+# It will send an email to $ADMIN, if the (free available) percentage of space is >= 90%.
+# -------------------------------------------------------------------------
+# Set admin email so that you can get email.
+ADMIN="root"
+# set alert level 90% is default
+ALERT=90
+# Exclude list of unwanted monitoring, if several partions then use "|" to separate the partitions.
+# An example: EXCLUDE_LIST="/dev/hdd1|/dev/hdc5"
+EXCLUDE_LIST="/auto/ripper"
+#
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+function main_prog() {
+while read output;
+do
+#echo $output
+  usep=$(echo $output | awk '{ print $1}' | cut -d'%' -f1)
+  partition=$(echo $output | awk '{print $2}')
+  if [ $usep -ge $ALERT ] ; then
+     echo "Running out of space \"$partition ($usep%)\" on server $(hostname), $(date)" | \
+     mail -s "Alert: Almost out of disk space $usep%" $ADMIN
+  fi
+done
+}
+
+if [ "$EXCLUDE_LIST" != "" ] ; then
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom|${EXCLUDE_LIST}" | awk '{print $5 " " $6}' | main_prog
+else
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom" | awk '{print $5 " " $6}' | main_prog
+fi
+↩ ∞
+aref Apr 17, 2021 @ 5:04
+Thanks for Sharing
+
+↩ ∞
+Anonymous Apr 13, 2022 @ 23:35
+Great job
+
+↩ ∞
+Amaterasu Aug 22, 2022 @ 6:47
+Awesome script especially updated version.
+
+↩ ∞
+Pras Nov 2, 2022 @ 11:27
+what if i want to know which file has caused a spike in usage?
+
+↩ ∞
+🛡️Vivek Gite (Author and Admin) Vivek Gite Nov 6, 2022 @ 10:01
+You need to configure monitoring service such as syssta and ksar.
+
+Read: https://www.cyberciti.biz/tips/identifying-linux-bottlenecks-sar-graphs-with-ksar.html
+
+HTH
+
+↩ ∞
+Jakob Ward Feb 28, 2023 @ 20:26
+Just what I needed for my LINUX disk space alerts! Thank you.
+
+↩ ∞
+Alan Robertson Apr 6, 2023 @ 19:54
+Very helpful – thanks. I found I didn’t have mail installed on my Debian machine and wanted to use an external SMTP provider anyway, so install msmtp instead. I changed the mail command to the following:
+
+printf "Subject: Disk space warning\n\nAlert: Almost out of disk space on server - $usep%% used" | msmtp -d -a default "$ADMIN"
+↩ ∞
+Mike May 2, 2024 @ 1:27
+I made a little bit change to take the disk space information and send out 1 mail. I try to put it in cron job. but it only sent out 1 blank mail to me. please help.
+
+#!/bin/sh
+ADMIN="admin@email.com"
+TO="myself@email.com"
+EXCLUDE_LIST="/dev/sda2"
+
+main_prog() {
+while read -r output;
+do
+  #echo "Working on $output ..."
+  usep=$(echo "$output" | awk '{ print $1}' | cut -d'%' -f1)
+  partition=$(echo "$output" | awk '{print $2}')
+  msgs+=$(echo -e "--- Running space \"$partition ($usep%)\" on server $(hostname) .\r\n")
+done
+echo $msgs | mail -s "Disk Space on Server $(hostname)" $TO -aFrom:$ADMIN
+}
+
+if [ "$EXCLUDE_LIST" != "" ] ; then
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom|${EXCLUDE_LIST}" | awk '{print $5 " " $6}' | main_prog
+else
+  df -H | grep -vE "^Filesystem|tmpfs|cdrom" | awk '{print $5 " " $6}' | main_prog
+fi
+↩ ∞
+🛡️Vivek Gite (Author and Admin) Vivek Gite May 4, 2024 @ 1:04
+In #/bin/sh the += is undefined. Similarly echo flags are undefined, too in #/bin/sh. Try using #!/bin/bash and the line should be:
+
+echo "$msgs" | mail -s "Disk Space on Server $(hostname)" $TO -aFrom:$ADMIN
+↩ ∞
+Anonymous Jun 14, 2024 @ 2:17
+Excelent, with little modification was able to monitor my ZFS partition for size and alert me when cleaning is necessary, many thanks!
+
+↩ ∞
+Leave a Reply
+Your email address will not be published. Required fields are marked *
+
+Comment *
+
+Name
+
+Use HTML <pre>...</pre> for code samples. Your comment will appear only after approval by the site admin.
+Next post: Linux: Finally, full read and write support for NTFS available for download
+
+Previous post: Repairing ReiserFS file system with reiserfsck
+
+      
+
+🔎 SEARCH
+
+🔎 To search, type & hit enter...
+🔥 FEATURED ARTICLES
+130 Cool Open Source Software I Discovered in 2013
+230 Handy Bash Shell Aliases For Linux / Unix / Mac OS X
+3Top 32 Nmap Command Examples For Linux Sys/Network Admins
+425 PHP Security Best Practices For Linux Sys Admins
+530 Linux System Monitoring Tools Every SysAdmin Should Know
+640 Linux Server Hardening Security Tips
+7Linux: 25 Iptables Netfilter Firewall Examples For New SysAdmins
+8Top 20 OpenSSH Server Best Security Practices
+9Top 25 Nginx Web Server Best Security Practices
+10My 10 UNIX Command Line Mistakes
+📧 SIGN UP FOR MY NEWSLETTER
+Sign up for my newsletter
+👀 /etc
+➔Howtos & Tutorials
+➔Linux shell scripting tutorial
+➔RSS/Feed
+➔About nixCraft
+➔nixCraft Shop
+➔Mastodon
+
+      
+©2002-2024 nixCraft • Privacy • ToS • Contact/Email • Corporate patron Cloudflare
+      
